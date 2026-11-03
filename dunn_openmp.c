@@ -5,7 +5,6 @@
 #include <float.h>
 #include <omp.h>
 
-// Ajuste das constantes para o dataset Shuttle (9 atributos, 7 classes)
 #define NUM_FEATURES 9
 #define NUM_CLASSES 7
 
@@ -19,7 +18,6 @@ typedef struct {
     int c2;
 } ClusterPair;
 
-// Distância Euclidiana entre dois pontos
 static inline double euclidean_distance(const Point* a, const Point* b) {
     double sum = 0.0;
     for (int i = 0; i < NUM_FEATURES; ++i) {
@@ -29,7 +27,6 @@ static inline double euclidean_distance(const Point* a, const Point* b) {
     return sqrt(sum);
 }
 
-// Leitura dinâmica do dataset shuttle.tst
 Point* load_full_dataset(const char* filepath, size_t* dataset_size) {
     FILE* file = fopen(filepath, "r");
     if (!file) {
@@ -44,7 +41,6 @@ Point* load_full_dataset(const char* filepath, size_t* dataset_size) {
 
     char line[1024];
     while (fgets(line, sizeof(line), file)) {
-        // Trata separadores por vírgula convertendo para espaço
         for (int i = 0; line[i] != '\0'; i++) {
             if (line[i] == ',') line[i] = ' ';
         }
@@ -54,7 +50,6 @@ Point* load_full_dataset(const char* filepath, size_t* dataset_size) {
         int n_read = 0;
         int valid = 1;
 
-        // Leitura dos 9 atributos do Shuttle
         for (int i = 0; i < NUM_FEATURES; i++) {
             if (sscanf(ptr, "%lf%n", &p.features[i], &n_read) == 1) {
                 ptr += n_read;
@@ -64,10 +59,9 @@ Point* load_full_dataset(const char* filepath, size_t* dataset_size) {
             }
         }
 
-        // Leitura da classe (1 a 7) e conversão para base 0 (0 a 6)
         int raw_label;
         if (valid && sscanf(ptr, "%d", &raw_label) == 1) {
-            p.label = raw_label - 1; // Ajusta de 1..7 para 0..6
+            p.label = raw_label - 1;
 
             if (count >= capacity) {
                 capacity *= 2;
@@ -90,9 +84,7 @@ Point* load_full_dataset(const char* filepath, size_t* dataset_size) {
     return dataset;
 }
 
-// Cálculo do Índice de Dunn com OpenMP
 double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int num_classes) {
-    // 1. Contagem de pontos por cluster
     int* cluster_sizes = (int*)calloc(num_classes, sizeof(int));
     for (size_t i = 0; i < dataset_size; ++i) {
         if (dataset[i].label >= 0 && dataset[i].label < num_classes) {
@@ -100,7 +92,6 @@ double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int 
         }
     }
 
-    // Alocação das listas de índices por classe
     int** clusters = (int**)malloc(num_classes * sizeof(int*));
     for (int c = 0; c < num_classes; ++c) {
         clusters[c] = (int*)malloc(cluster_sizes[c] * sizeof(int));
@@ -114,7 +105,6 @@ double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int 
         }
     }
 
-    // 2. Diâmetro Máximo Intra-cluster
     double max_intra_diameter = 0.0;
 
     #pragma omp parallel for reduction(max:max_intra_diameter) schedule(dynamic)
@@ -135,7 +125,6 @@ double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int 
         }
     }
 
-    // 3. Distância Mínima Inter-cluster
     double min_inter_distance = DBL_MAX;
 
     int total_pairs = (num_classes * (num_classes - 1)) / 2;
@@ -157,7 +146,6 @@ double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int 
         int size1 = cluster_sizes[c1];
         int size2 = cluster_sizes[c2];
 
-        // Se uma das classes não tiver elementos, ignora o par
         if (size1 == 0 || size2 == 0) continue;
 
         double local_min_dist = DBL_MAX;
@@ -176,7 +164,6 @@ double compute_dunn_index_openmp(const Point* dataset, size_t dataset_size, int 
         }
     }
 
-    // Liberação de memória
     for (int c = 0; c < num_classes; ++c) {
         free(clusters[c]);
     }
